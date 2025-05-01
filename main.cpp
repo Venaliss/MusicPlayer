@@ -6,7 +6,7 @@
 int main() {
     if (!glfwInit()) return -1;
 
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGUI", NULL, NULL);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
@@ -24,8 +24,8 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("Hello, world!");
-        ImGui::Text("This is ImGui running!");
+        ImGui::Begin("Hello, WORLD!");
+        ImGui::Text("This is not ImGui running! KEK");
         ImGui::End();
 
         ImGui::Render();
