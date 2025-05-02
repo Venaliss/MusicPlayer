@@ -12,7 +12,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(imgui)
 
-# --- Fetch GLFW (cross-platform windowing lib) ---
+# --- Fetch GLFW (cross-platform windowing library) ---
 FetchContent_Declare(
   glfw
   GIT_REPOSITORY https://github.com/glfw/glfw.git
@@ -20,7 +20,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-# --- Source files ---
+# --- Source files for ImGui ---
 set(IMGUI_SRC
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_demo.cpp
@@ -32,12 +32,20 @@ set(IMGUI_SRC
 )
 
 # --- Executable ---
-add_executable(MyIMGUIApp main.cpp ${IMGUI_SRC})
+# Добавлены все необходимые исходники: основной файл и реализации классов UI.
+add_executable(MyIMGUIApp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/ImGuiManager.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/MainWindow.cpp
+  ${IMGUI_SRC}
+)
 
-# --- Include dirs ---
+# --- Include directories ---
 target_include_directories(MyIMGUIApp PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
 )
 message(STATUS "ImGui source directory: ${imgui_SOURCE_DIR}")
 

@@ -1,46 +1,31 @@
+#include "UI/ImGuiManager.h"
+#include "UI/MainWindow.h"
+#include <GLFW/glfw3.h> // Для glfwPollEvents()
 #include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
-#include <GLFW/glfw3.h>
 
-int main() {
-    if (!glfwInit()) return -1;
-
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGUI", NULL, NULL);
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
-
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 130");
-
-    ImGui::StyleColorsDark();
-
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        ImGui::Begin("Hello, WORLD!");
-        ImGui::Text("This is not ImGui running! KEK");
-        ImGui::End();
-
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glfwSwapBuffers(window);
+int main(int, char**)
+{
+    // Инициализируем менеджер ImGui.
+    ImGuiManager imguiManager;
+    if (!imguiManager.Init()) {
+        return -1;
     }
 
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    // Создаем экземпляр главного окна плеера.
+    MainWindow mainWindow;
+
+    // Основной цикл приложения.
+    while (!imguiManager.WindowShouldClose())
+    {
+        imguiManager.NewFrame();
+
+        // Отрисовываем интерфейс главного окна.
+        mainWindow.Render();
+
+        // Выполняем рендеринг ImGui-данных и обновляем окно.
+        imguiManager.Render();
+        glfwPollEvents();
+    }
+    
     return 0;
 }
