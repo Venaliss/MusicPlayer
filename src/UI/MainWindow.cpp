@@ -14,31 +14,31 @@ MainWindow::MainWindow() {
 }
 
 void MainWindow::Render() {
-    ImGui::Begin("Музыкальный плеер");
+    ImGui::Begin("MusicPlayer");
     
     // Отображение текущего трека
     std::string currentTrack = AudioEngine::Instance()->getCurrentTrack();
-    ImGui::Text("Название трека: %s", currentTrack.empty() ? "Нет трека" : currentTrack.c_str());
+    ImGui::Text("Track name: %s", currentTrack.empty() ? "No track" : currentTrack.c_str());
     
     // Панель управления воспроизведением
-    if (ImGui::Button("Предыдущий")) {
+    if (ImGui::Button("After")) {
         AudioEngine::Instance()->prev();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Стоп")) {
+    if (ImGui::Button("Stop")) {
         AudioEngine::Instance()->stop();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Проигрывать")) {
+    if (ImGui::Button("Play")) {
         AudioEngine::Instance()->play();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Следующий")) {
+    if (ImGui::Button("Next")) {
         AudioEngine::Instance()->next();
     }
     
     ImGui::Separator();
-    ImGui::Text("Плейлист");
+    ImGui::Text("Playlist");
     
     // Область вывода плейлиста
     ImGui::BeginChild("PlaylistArea", ImVec2(300, 200), true);
@@ -52,23 +52,23 @@ void MainWindow::Render() {
     ImGui::EndChild();
     
     // Кнопки "Добавить" и "Убрать"
-    if (ImGui::Button("Добавить")) {
+    if (ImGui::Button("Add")) {
         // Здесь должна вызываться функция открытия диалога выбора файла.
         // Используйте ImGuiFileDialog или аналогичный подход.
         // В данном примере просто добавляем тестовый трек.
-        AudioEngine::Instance()->addTrack("НовыйТрек.mp3");
+        AudioEngine::Instance()->addTrack("new_track.mp3");
     }
     ImGui::SameLine();
-    if (ImGui::Button("Убрать")) {
+    if (ImGui::Button("Delete")) {
         if (selectedTrackIndex != -1 && selectedTrackIndex < static_cast<int>(playlist.size()))
-            ImGui::OpenPopup("Подтверждение удаления");
+            ImGui::OpenPopup("Really delete?");
     }
     
     // Диалог подтверждения удаления трека
-    if (ImGui::BeginPopupModal("Подтверждение удаления", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Вы уверены, что хотите убрать этот трек из плейлиста?");
+    if (ImGui::BeginPopupModal("Really delete?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("You want delete the track?");
         ImGui::Separator();
-        if (ImGui::Button("Да", ImVec2(120, 0))) {
+        if (ImGui::Button("Yes", ImVec2(120, 0))) {
             if (selectedTrackIndex != -1 && selectedTrackIndex < static_cast<int>(playlist.size())) {
                 std::string trackToRemove = playlist[selectedTrackIndex];
                 AudioEngine::Instance()->removeTrack(trackToRemove);
@@ -77,7 +77,7 @@ void MainWindow::Render() {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Нет", ImVec2(120, 0))) {
+        if (ImGui::Button("No", ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

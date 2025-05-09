@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(MyIMGUIProject)
-if(WIN32)
-    set(GLFW_WAYLAND_SUPPORT OFF CACHE BOOL "Disable Wayland support for GLFW on Windows")
-endif()
 
+# Отключаем поддержку Wayland для GLFW (принудительно)
+set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "Disable building with Wayland support" FORCE)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -28,16 +27,13 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(
   minimp3
   GIT_REPOSITORY https://github.com/lieff/minimp3.git
-  GIT_TAG master
+  GIT_TAG master   # используйте main, если master не существует
 )
 FetchContent_MakeAvailable(minimp3)
 
-# --- Create minimp3 library target ---
-add_library(minimp3 STATIC
-    ${minimp3_SOURCE_DIR}/minimp3_ex.c
-)
-target_include_directories(minimp3 PUBLIC ${minimp3_SOURCE_DIR})
-set_target_properties(minimp3 PROPERTIES LINKER_LANGUAGE C)
+# --- Create minimp3 interface library target ---
+add_library(minimp3 INTERFACE)
+target_include_directories(minimp3 INTERFACE ${minimp3_SOURCE_DIR})
 
 # --- Source files for ImGui ---
 set(IMGUI_SRC
@@ -51,11 +47,11 @@ set(IMGUI_SRC
 )
 
 # --- Executable --- 
-# Добавлены все необходимые исходники: основной файл и реализации классов UI.
 add_executable(MyIMGUIApp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/ImGuiManager.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/MainWindow.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/AudioEngine.cpp
   ${IMGUI_SRC}
 )
 
@@ -63,7 +59,6 @@ add_executable(MyIMGUIApp
 target_include_directories(MyIMGUIApp PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
-  ${minimp3_SOURCE_DIR}  # Добавляем директорию с исходниками minimp3
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
 )

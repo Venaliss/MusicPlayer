@@ -1,11 +1,11 @@
 #include "ImGuiManager.h"
 #include "imgui.h"
-#include "imgui_impl_sdl.h"
+#include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#include <SDL.h>
+#include <GLFW/glfw3.h>
 
-extern SDL_Window* g_Window;
-extern SDL_GLContext g_GLContext;
+// Объявляем глобальную переменную для GLFW окна
+extern GLFWwindow* g_Window;
 
 void ImGuiManager::Init() {
     // Создаем контекст ImGui и настраиваем стили
@@ -13,19 +13,19 @@ void ImGuiManager::Init() {
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
     
-    // Инициализация ImGui с backend-ами SDL2 и OpenGL
-    ImGui_ImplSDL2_InitForOpenGL(g_Window, g_GLContext);
+    // Инициализация ImGui с backend-ами GLFW и OpenGL
+    ImGui_ImplGlfw_InitForOpenGL(g_Window, true);
     ImGui_ImplOpenGL3_Init("#version 130");
 }
 
 void ImGuiManager::Shutdown() {
     ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
 
 void ImGuiManager::NewFrame() {
     ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplSDL2_NewFrame(g_Window);
+    ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 }
