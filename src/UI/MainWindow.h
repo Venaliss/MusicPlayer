@@ -3,7 +3,7 @@
 
 class MainWindow {
 public:
-    // Отрисовка интерфейса плеера
+    MainWindow();
     void Render();
 };
 

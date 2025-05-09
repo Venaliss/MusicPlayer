@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 project(MyIMGUIProject)
+if(WIN32)
+    set(GLFW_WAYLAND_SUPPORT OFF CACHE BOOL "Disable Wayland support for GLFW on Windows")
+endif()
+
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -20,6 +24,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
+# --- Fetch minimp3 ---
+FetchContent_Declare(
+  minimp3
+  GIT_REPOSITORY https://github.com/lieff/minimp3.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(minimp3)
+
+# --- Create minimp3 library target ---
+add_library(minimp3 STATIC
+    ${minimp3_SOURCE_DIR}/minimp3_ex.c
+)
+target_include_directories(minimp3 PUBLIC ${minimp3_SOURCE_DIR})
+set_target_properties(minimp3 PROPERTIES LINKER_LANGUAGE C)
+
 # --- Source files for ImGui ---
 set(IMGUI_SRC
   ${imgui_SOURCE_DIR}/imgui.cpp
@@ -31,7 +50,7 @@ set(IMGUI_SRC
   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-# --- Executable ---
+# --- Executable --- 
 # Добавлены все необходимые исходники: основной файл и реализации классов UI.
 add_executable(MyIMGUIApp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
@@ -44,13 +63,16 @@ add_executable(MyIMGUIApp
 target_include_directories(MyIMGUIApp PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
+  ${minimp3_SOURCE_DIR}  # Добавляем директорию с исходниками minimp3
   ${CMAKE_CURRENT_SOURCE_DIR}/src
   ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
 )
+
 message(STATUS "ImGui source directory: ${imgui_SOURCE_DIR}")
+message(STATUS "minimp3 source directory: ${minimp3_SOURCE_DIR}")
 
 # --- Link libraries ---
-target_link_libraries(MyIMGUIApp PRIVATE glfw)
+target_link_libraries(MyIMGUIApp PRIVATE glfw minimp3)
 
 if (WIN32)
   target_link_libraries(MyIMGUIApp PRIVATE opengl32)
