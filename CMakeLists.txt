@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 include(FetchContent)
 
-# ---------------- Fetch контент ------------------
+# ---------------- Fetch Content ------------------
 
 # Fetch Dear ImGui
 FetchContent_Declare(
@@ -37,13 +37,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(minimp3)
 
-# Fetch ImGuiFileDialog
+# Для ImGuiFileDialog не вызываем FetchContent_MakeAvailable, чтобы не использовать его CMakeLists.txt
 FetchContent_Declare(
   imguifiledialog
   GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
   GIT_TAG master
 )
-FetchContent_MakeAvailable(imguifiledialog)
+FetchContent_GetProperties(imguifiledialog)
+if (NOT imguifiledialog_POPULATED)
+  FetchContent_Populate(imguifiledialog)
+endif()
 
 # Fetch SDL
 set(SDL_SHARED ON CACHE BOOL "Build SDL as a shared library" FORCE)
@@ -54,25 +57,28 @@ FetchContent_Declare(
   GIT_TAG release-2.0.22
 )
 FetchContent_MakeAvailable(sdl)
-# Используем FetchContent – не вызываем add_subdirectory вручную, чтобы избежать дублирования целей
+# ---------------- End Fetch Content ------------------
 
-# ---------------- Конец Fetch контента ------------------
+# --- Глобально задаем путь к ImGui ---
+set(IMGUI_INCLUDE_DIR ${imgui_SOURCE_DIR})
+include_directories(${IMGUI_INCLUDE_DIR})
 
-# --- Создаем таргет для minimp3_ex (реализация MP3-декодера) ---
-# Созданный нами файл src/minimp3_ex.cpp содержит:
+# --- Создаем цель для minimp3_ex (реализация MP3-декодера) ---
+# Файл src/minimp3_ex.cpp содержит:
 #   #define MINIMP3_IMPLEMENTATION
 #   #include "minimp3_ex.h"
 add_library(minimp3_ex STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/minimp3_ex.cpp)
 target_include_directories(minimp3_ex PUBLIC ${minimp3_SOURCE_DIR})
 
-# --- Создаем таргет ImGuiFileDialog ---
+# --- Создаем цель ImGuiFileDialog вручную ---
+# Вместо использования собранной цели из имгуифайлдиалога, добавляем исходный файл напрямую.
 add_library(imguifiledialog STATIC
     ${imguifiledialog_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
 target_include_directories(imguifiledialog 
     PUBLIC 
-        ${imguifiledialog_SOURCE_DIR}  # Заголовочные файлы ImGuiFileDialog
-        ${imgui_SOURCE_DIR}            # Для поиска imgui.h
+        ${imguifiledialog_SOURCE_DIR}     # Заголовочные файлы ImGuiFileDialog
+        ${IMGUI_INCLUDE_DIR}               # Для поиска "imgui.h"
 )
 
 # --- Исходники для ImGui ---
@@ -95,17 +101,18 @@ add_executable(MyIMGUIApp
     ${IMGUI_SRC}
 )
 
-# --- Include директории ---
+# --- Include директории для MyIMGUIApp ---
 target_include_directories(MyIMGUIApp PRIVATE
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
-    ${imguifiledialog_SOURCE_DIR}   # Для include ImGuiFileDialog.h
+    ${imguifiledialog_SOURCE_DIR}   # Для include ImGuiFileDialog.h, если используете его в коде
     ${sdl_SOURCE_DIR}/include       # Чтобы компилятор нашел SDL.h
 )
 
 message(STATUS "ImGui source directory: ${imgui_SOURCE_DIR}")
+message(STATUS "IMGUI_INCLUDE_DIR: ${IMGUI_INCLUDE_DIR}")
 message(STATUS "minimp3 source directory: ${minimp3_SOURCE_DIR}")
 message(STATUS "ImGuiFileDialog source directory: ${imguifiledialog_SOURCE_DIR}")
 message(STATUS "SDL source directory: ${sdl_SOURCE_DIR}")
@@ -129,7 +136,6 @@ endif()
 if(WIN32)
   add_custom_command(TARGET MyIMGUIApp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "$<TARGET_FILE:SDL2>"   # Это даст полный путь к DLL, привязанной к цели SDL2
+      "$<TARGET_FILE:SDL2>"   # Полный путь к DLL для SDL2
       $<TARGET_FILE_DIR:MyIMGUIApp>)
 endif()
-

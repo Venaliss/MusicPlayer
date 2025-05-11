@@ -1,11 +1,12 @@
 #include "AudioEngine.h"
 #include <iostream>
-#include <fstream>    // для проверки существования файла
+#include <fstream>
 #include <cmath>
 #include <algorithm>
 #include <cstring>
-#include "minimp3_ex.h"  // убедитесь, что в одном файле проекта определён MINIMP3_IMPLEMENTATION
+#include "minimp3_ex.h"  // Убедитесь, что MINIMP3_IMPLEMENTATION определён только в одном файле
 
+// Singleton for AudioEngine
 AudioEngine* AudioEngine::Instance() {
     static AudioEngine instance;
     return &instance;
@@ -14,33 +15,34 @@ AudioEngine* AudioEngine::Instance() {
 AudioEngine::AudioEngine()
     : currentTrackIndex_(-1), audioBufferPos_(0), isPlaying_(false)
 {
-    // Инициализация аудио подсистемы SDL.
+    // Initialize SDL audio subsystem.
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
-        std::cerr << "Ошибка инициализации SDL аудио: " << SDL_GetError() << std::endl;
+        std::cerr << "SDL audio initialization error: " << SDL_GetError() << std::endl;
     }
     
     SDL_AudioSpec desiredSpec;
     SDL_zero(desiredSpec);
-    desiredSpec.freq = 44100;           // Рабочая частота 44100 Гц
+    desiredSpec.freq = 44100;           // Frequency 44100 Hz
     desiredSpec.format = AUDIO_S16LSB;    // 16-bit PCM
-    desiredSpec.channels = 2;             // Стерео
-    desiredSpec.samples = 4096;           // Размер буфера
+    desiredSpec.channels = 2;             // Stereo
+    desiredSpec.samples = 4096;           // Buffer size
     desiredSpec.callback = AudioEngine::audioCallbackWrapper;
     desiredSpec.userdata = this;
     
     SDL_AudioSpec obtainedSpec;
     deviceId_ = SDL_OpenAudioDevice(nullptr, 0, &desiredSpec, &obtainedSpec, 0);
     if (deviceId_ == 0) {
-        std::cerr << "Ошибка открытия аудио устройства: " << SDL_GetError() << std::endl;
+        std::cerr << "Error opening audio device: " << SDL_GetError() << std::endl;
     } else {
-        std::cout << "Аудиоустройство успешно открыто: частота " 
-                  << obtainedSpec.freq << " Гц, каналы: " 
+        std::cout << "Audio device successfully opened: frequency " 
+                  << obtainedSpec.freq << " Hz, channels: " 
                   << static_cast<int>(obtainedSpec.channels) << std::endl;
     }
 }
 
 AudioEngine::~AudioEngine() {
-    SDL_CloseAudioDevice(deviceId_);
+    if (deviceId_ != 0)
+        SDL_CloseAudioDevice(deviceId_);
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
@@ -52,7 +54,7 @@ void AudioEngine::addTrack(const std::string &filePath) {
 void AudioEngine::removeTrack(const std::string &filePath) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = std::find(playlist_.begin(), playlist_.end(), filePath);
-    if(it != playlist_.end()){
+    if (it != playlist_.end()) {
         playlist_.erase(it);
     }
     if (currentTrackIndex_ >= static_cast<int>(playlist_.size())) {
@@ -71,81 +73,111 @@ const std::vector<std::string>& AudioEngine::getPlaylist() const {
     return playlist_;
 }
 
-void AudioEngine::prev() {
-    std::lock_guard<std::mutex> lock(mutex_);
+// --- Updated functions using SDL audio locks ---
+
+void AudioEngine::play() {
     if (playlist_.empty())
         return;
-    currentTrackIndex_ = (currentTrackIndex_ <= 0) ? playlist_.size() - 1 : currentTrackIndex_ - 1;
-    if (!loadTrack(playlist_[currentTrackIndex_])) {
-         std::cerr << "Ошибка загрузки трека: " << playlist_[currentTrackIndex_] << std::endl;
+    if (deviceId_ == 0) {
+        std::cerr << "Audio device not available, cannot play track!" << std::endl;
+        return;
     }
+    // Lock audio device to pause the callback and avoid concurrent buffer access
+    SDL_LockAudioDevice(deviceId_);
+    if (currentTrackIndex_ < 0 || currentTrackIndex_ >= static_cast<int>(playlist_.size()))
+        currentTrackIndex_ = 0;
+    if (!loadTrack(playlist_[currentTrackIndex_])) {
+         SDL_UnlockAudioDevice(deviceId_);
+         std::cerr << "Error loading track: " << playlist_[currentTrackIndex_] << std::endl;
+         isPlaying_ = false;
+         return;
+    }
+    audioBufferPos_ = 0;
+    isPlaying_ = true;
+    SDL_UnlockAudioDevice(deviceId_);
+    SDL_PauseAudioDevice(deviceId_, 0);  // Start playback
 }
 
 void AudioEngine::next() {
-    std::lock_guard<std::mutex> lock(mutex_);
     if (playlist_.empty())
         return;
+    if (deviceId_ == 0)
+        return;
+    SDL_LockAudioDevice(deviceId_);
     currentTrackIndex_ = (currentTrackIndex_ + 1) % playlist_.size();
     if (!loadTrack(playlist_[currentTrackIndex_])) {
-         std::cerr << "Ошибка загрузки трека: " << playlist_[currentTrackIndex_] << std::endl;
-    }
-}
-
-void AudioEngine::play() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (playlist_.empty())
-        return;
-    if (currentTrackIndex_ < 0 || currentTrackIndex_ >= static_cast<int>(playlist_.size()))
-        currentTrackIndex_ = 0;
-    
-    // Загружаем трек. Если загрузка не удалась, выводим сообщение.
-    if (!loadTrack(playlist_[currentTrackIndex_])) {
-         std::cerr << "Ошибка загрузки трека: " << playlist_[currentTrackIndex_] << std::endl;
+         SDL_UnlockAudioDevice(deviceId_);
+         std::cerr << "Error loading track: " << playlist_[currentTrackIndex_] << std::endl;
+         isPlaying_ = false;
          return;
     }
-    isPlaying_ = true;
-    SDL_PauseAudioDevice(deviceId_, 0);  // Запускаем воспроизведение
+    audioBufferPos_ = 0;
+    SDL_UnlockAudioDevice(deviceId_);
+    if (isPlaying_)
+         SDL_PauseAudioDevice(deviceId_, 0);
+}
+
+void AudioEngine::prev() {
+    if (playlist_.empty())
+        return;
+    if (deviceId_ == 0)
+         return;
+    SDL_LockAudioDevice(deviceId_);
+    currentTrackIndex_ = (currentTrackIndex_ <= 0) ? playlist_.size() - 1 : currentTrackIndex_ - 1;
+    if (!loadTrack(playlist_[currentTrackIndex_])) {
+         SDL_UnlockAudioDevice(deviceId_);
+         std::cerr << "Error loading track: " << playlist_[currentTrackIndex_] << std::endl;
+         isPlaying_ = false;
+         return;
+    }
+    audioBufferPos_ = 0;
+    SDL_UnlockAudioDevice(deviceId_);
+    if (isPlaying_)
+         SDL_PauseAudioDevice(deviceId_, 0);
 }
 
 void AudioEngine::stop() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    if (deviceId_ == 0)
+         return;
     isPlaying_ = false;
-    SDL_PauseAudioDevice(deviceId_, 1);  // Останавливаем воспроизведение
+    SDL_PauseAudioDevice(deviceId_, 1);  // Stop playback
 }
 
-// Функция загрузки MP3 трека с использованием minimp3
+// --- LoadTrack remains similar, but ensure full update is protected ---
 bool AudioEngine::loadTrack(const std::string &filePath) {
-    // Проверяем, существует ли файл
+    // Check file existence
     std::ifstream infile(filePath);
     if (!infile.good()) {
-        std::cerr << "Файл не найден: " << filePath << std::endl;
+        std::cerr << "File not found: " << filePath << std::endl;
         return false;
     }
     infile.close();
-    
+
     mp3dec_t dec;
     mp3dec_init(&dec);
 
     mp3dec_file_info_t info;
     std::memset(&info, 0, sizeof(info));
-    
-    // Загрузка MP3 файла. Возвращает 0 при успехе.
+
     if (mp3dec_load(&dec, filePath.c_str(), &info, nullptr, 0) != 0) {
-         std::cerr << "Ошибка декодирования MP3 файла: " << filePath << std::endl;
+         std::cerr << "Error decoding MP3 file: " << filePath << std::endl;
          return false;
     }
-    
-    // Проверяем частоту дискретизации – в данном примере поддерживаются только 44100 Гц.
+
     if (info.hz != 44100) {
-         std::cerr << "Неподдерживаемая частота дискретизации: " << info.hz 
-                   << " Гц. Файл: " << filePath << std::endl;
+         std::cerr << "Unsupported frequency (" << info.hz << " Hz) in file: " << filePath << std::endl;
          free(info.buffer);
+         return false;
+    }
+
+    if (info.samples == 0 || info.buffer == nullptr) {
+         std::cerr << "No samples available in file: " << filePath << std::endl;
+         if (info.buffer)
+             free(info.buffer);
          return false;
     }
     
     std::vector<int16_t> buffer;
-    
-    // Если файл моно, преобразуем в стерео (дублируем каждый сэмпл)
     if (info.channels == 1) {
          buffer.resize(info.samples * 2);
          mp3d_sample_t *samples_ptr = info.buffer;
@@ -153,15 +185,11 @@ bool AudioEngine::loadTrack(const std::string &filePath) {
              buffer[i * 2]     = samples_ptr[i];
              buffer[i * 2 + 1] = samples_ptr[i];
          }
-    }
-    // Если файл стереофонический, копируем данные (info.samples уже включает оба канала)
-    else if (info.channels == 2) {
+    } else if (info.channels == 2) {
          buffer.resize(info.samples);
          std::memcpy(buffer.data(), info.buffer, info.samples * sizeof(mp3d_sample_t));
-    }
-    else {
-         std::cerr << "Неподдерживаемое количество каналов (" << info.channels 
-                   << ") в файле: " << filePath << std::endl;
+    } else {
+         std::cerr << "Unsupported number of channels (" << info.channels << ") in file: " << filePath << std::endl;
          free(info.buffer);
          return false;
     }
@@ -173,30 +201,28 @@ bool AudioEngine::loadTrack(const std::string &filePath) {
     }
     
     free(info.buffer);
-    std::cout << "Трек успешно загружен: " << filePath << ", " 
-              << "длина буфера: " << audioBuffer_.size() << " сэмплов" << std::endl;
+    std::cout << "Track successfully loaded: " << filePath 
+              << ", buffer length: " << audioBuffer_.size() << " samples" << std::endl;
     return true;
 }
 
 void AudioEngine::audioCallback(Uint8* stream, int len) {
+    // Callback uses mutex to safely read data.
     std::lock_guard<std::mutex> lock(mutex_);
     SDL_memset(stream, 0, len);
-    if (!isPlaying_)
+    if (!isPlaying_ || audioBuffer_.empty())
          return;
     
     int bytesPerSample = sizeof(int16_t);
     int channels = 2;
     int bytesPerFrame = bytesPerSample * channels;
     int framesToWrite = len / bytesPerFrame;
-    
+
     for (int i = 0; i < framesToWrite; i++) {
-        if (audioBufferPos_ < audioBuffer_.size()) {
-            SDL_memcpy(stream + i * bytesPerFrame,
-                       &audioBuffer_[audioBufferPos_],
-                       bytesPerFrame);
+        if (audioBufferPos_ + channels <= audioBuffer_.size()) {
+            SDL_memcpy(stream + i * bytesPerFrame, &audioBuffer_[audioBufferPos_], bytesPerFrame);
             audioBufferPos_ += channels;
         } else {
-            // Достигнут конец буфера
             isPlaying_ = false;
             break;
         }
