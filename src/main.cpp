@@ -7,7 +7,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
-// Глобальная переменная окна для GLFW (используется в ImGuiManager)
+// Глобальная переменая окна для GLFW
 GLFWwindow* g_Window = nullptr;
 
 int main(int argc, char* argv[]) {
@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Настройки OpenGL (здесь используется версия 3.0, соответствующая "#version 130")
+    // Настройки OpenGL (здесь используеться версия 3.0, соответствующая 130)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     }
 
     glfwMakeContextCurrent(g_Window);
-    glfwSwapInterval(1); // Вертикальная синхронизация
+    glfwSwapInterval(1); // Вертикальная синхрониация
 
     // Инициализация ImGui через наш менеджер (используется теперь GLFW)
     ImGuiManager::Init();
@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
 
     // Основной цикл приложения
     while (!glfwWindowShouldClose(g_Window)) {
-        // Обработка событий GLFW
+        // Обрабтка событий GLFW
         glfwPollEvents();
 
         // Начало нового кадра ImGui
