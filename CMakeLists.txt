@@ -64,14 +64,14 @@ set(IMGUI_INCLUDE_DIR ${imgui_SOURCE_DIR})
 include_directories(${IMGUI_INCLUDE_DIR})
 
 # --- Создаем цель для minimp3_ex (реализация MP3-декодера) ---
-# Файл src/minimp3_ex.cpp содержит:
+# Файл src/minimp3_ex.cpp должен содержать:
 #   #define MINIMP3_IMPLEMENTATION
 #   #include "minimp3_ex.h"
 add_library(minimp3_ex STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/minimp3_ex.cpp)
 target_include_directories(minimp3_ex PUBLIC ${minimp3_SOURCE_DIR})
 
 # --- Создаем цель ImGuiFileDialog вручную ---
-# Вместо использования собранной цели из имгуифайлдиалога, добавляем исходный файл напрямую.
+# Вместо использования собранной цели из imguifiledialog, добавляем исходный файл напрямую.
 add_library(imguifiledialog STATIC
     ${imguifiledialog_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
@@ -92,7 +92,7 @@ set(IMGUI_SRC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-# --- Создаем исполняемый файл ---
+# --- Создаем исполняемый файл приложения ---
 add_executable(MyIMGUIApp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/ImGuiManager.cpp
@@ -107,7 +107,7 @@ target_include_directories(MyIMGUIApp PRIVATE
     ${imgui_SOURCE_DIR}/backends
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
-    ${imguifiledialog_SOURCE_DIR}   # Для include ImGuiFileDialog.h, если используете его в коде
+    ${imguifiledialog_SOURCE_DIR}   # Для include ImGuiFileDialog.h, если используется в коде
     ${sdl_SOURCE_DIR}/include       # Чтобы компилятор нашел SDL.h
 )
 
@@ -139,3 +139,30 @@ if(WIN32)
       "$<TARGET_FILE:SDL2>"   # Полный путь к DLL для SDL2
       $<TARGET_FILE_DIR:MyIMGUIApp>)
 endif()
+
+# ---------------- ТЕСТЫ ------------------
+# В директории 'tests' должен быть файл test.cpp, содержащий тесты для AudioEngine и других функций.
+enable_testing()
+
+# Создаем тестовую цель, которая включает тестовый исходник и аудио движок.
+add_executable(AudioEngineTests 
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/test.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/AudioEngine.cpp  # Подключаем реализацию AudioEngine для тестирования
+)
+
+target_include_directories(AudioEngineTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src      # Для поиска AudioEngine.h (если он находится здесь)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/UI   # При необходимости, если используются UI-headers
+    ${imgui_SOURCE_DIR}                   # Для ImGui (если требуется)
+    ${sdl_SOURCE_DIR}/include             # Для SDL.h
+)
+
+# Линкуем минимальный набор зависимостей для тестов.
+target_link_libraries(AudioEngineTests PRIVATE
+    minimp3_ex
+    SDL2
+    SDL2main
+)
+
+# Регистрируем тестовую цель в CTest
+add_test(NAME AudioEngineTests COMMAND AudioEngineTests)

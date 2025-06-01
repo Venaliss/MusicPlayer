@@ -3,7 +3,7 @@
 
 #include <string>
 #include <vector>
-// Предполагается, что IAudioDecoder определён в "src/Audio/Interface/IAudioDecoder.h"
+// IAudioDecoder определён в "src/Audio/Interface/IAudioDecoder.h"
 #include "../Interface/IAudioDecoder.h"
 
 class MP3Decoder : public IAudioDecoder {

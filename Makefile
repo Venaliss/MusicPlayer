@@ -1,56 +1,40 @@
-# Компиляторы
-CXX       = g++
-CC        = gcc
+# Makefile для проекта MusicPlayer
 
-# Пути к исходникам и include-директориям
-CXXFLAGS  = -std=c++17 -Wall -I./src -I./external/imgui -I./external/imgui/backends -I./external/minimp3 $(shell pkg-config --cflags glfw3)
-CFLAGS    = -Wall -I./src -I./external/imgui -I./external/imgui/backends -I./external/minimp3 $(shell pkg-config --cflags glfw3)
+# Папка сборки (вы можете изменить её имя по необходимости)
+BUILD_DIR := build
 
-# Флаги линковщика - используем pkg-config для GLFW, добавляем системные библиотеки
-LDFLAGS   = $(shell pkg-config --libs glfw3) -lGL -ldl -lpthread
+# Определяем имя конечного исполняемого файла
+ifeq ($(OS),Windows_NT)
+	TARGET := MyIMGUIApp.exe
+	# Используем rm -rf для удаления каталога в Unix-совместимой оболочке (например, Git Bash)
+	RM_CMD := rm -rf
+	RUN_CMD := $(BUILD_DIR)/$(TARGET)
+else
+	TARGET := MyIMGUIApp
+	RM_CMD := rm -rf
+	RUN_CMD := ./$(BUILD_DIR)/$(TARGET)
+endif
 
-# Список исходных файлов C++.
-CPP_SRCS  = \
-    src/main.cpp \
-    src/Audio/AudioEngine.cpp \
-    src/Audio/Decoders/MP3Decoder.cpp \
-    src/UI/ImGuiManager.cpp \
-    src/UI/MainWindow.cpp \
-    external/imgui/imgui.cpp \
-    external/imgui/imgui_demo.cpp \
-    external/imgui/imgui_draw.cpp \
-    external/imgui/imgui_tables.cpp \
-    external/imgui/imgui_widgets.cpp \
-    external/imgui/backends/imgui_impl_glfw.cpp \
-    external/imgui/backends/imgui_impl_opengl3.cpp
+.PHONY: all clean rebuild run
 
-# Исходный файл на C для minimp3.
-C_SRCS    = external/minimp3/minimp3_ex.c
+# Цель "all" (по умолчанию) генерирует файлы сборки и собирает проект.
+all: $(BUILD_DIR)/$(TARGET)
 
-# Правило для получения объектных файлов из файлов C++ и C.
-OBJ_CPP   = $(CPP_SRCS:.cpp=.o)
-OBJ_C     = $(C_SRCS:.c=.o)
-OBJS      = $(OBJ_CPP) $(OBJ_C)
+$(BUILD_DIR)/$(TARGET):
+	@echo "Generating build files with CMake..."
+	cmake -S . -B $(BUILD_DIR)
+	@echo "Building project..."
+	cmake --build $(BUILD_DIR)
 
-# Имя конечного исполняемого файла
-TARGET    = MyIMGUIApp
-
-# Правило сборки
-all: $(TARGET)
-
-$(TARGET): $(OBJS)
-    $(CXX) $(OBJS) -o $(TARGET) $(LDFLAGS)
-
-# Команда для компиляции файлов C++
-%.o: %.cpp
-    $(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Команда для компиляции файлов C
-%.o: %.c
-    $(CC) $(CFLAGS) -c $< -o $@
-
-# Очистка сгенерированных файлов
+# Цель "clean" удаляет папку сборки.
 clean:
-    rm -f $(OBJ_CPP) $(OBJ_C) $(TARGET)
+	@echo "Cleaning build directory..."
+	$(RM_CMD) $(BUILD_DIR)
 
-.PHONY: all clean
+# Цель "rebuild" выполняет очистку и последующую полную сборку.
+rebuild: clean all
+
+# Цель "run" сначала собирает проект, а затем запускает конечное приложение.
+run: all
+	@echo "Running $(TARGET)..."
+	$(RUN_CMD)

@@ -1,5 +1,5 @@
 #include "MP3Decoder.h"
-#include "minimp3_ex.h"  // Убедитесь, что в одном модуле объявлен: #define MINIMP3_IMPLEMENTATION
+#include "minimp3_ex.h"  
 #include <cstring>      // для std::memset
 #include <cstdlib>      // для free
 
@@ -11,7 +11,6 @@ MP3Decoder::~MP3Decoder() {
 
 bool MP3Decoder::load(const std::string& filename) {
     // Сохраняем имя файла (или путь) в переменной-члене.
-    // В реальной реализации можно добавить проверку существования файла и извлечение метаданных.
     trackTitle = filename;
     return true;
 }

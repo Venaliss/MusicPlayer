@@ -2,8 +2,11 @@
 #include "UI/ImGuiManager.h"
 #include "Audio/AudioEngine.h"
 #include "imgui.h"
-#include "ImGuiFileDialog.h"  // убедитесь, что этот файл доступен в include-пути
+#include "ImGuiFileDialog.h" 
 #include <string>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 static int selectedTrackIndex = -1;  // индекс выбранного трека, -1 если ни один не выбран
 
@@ -12,11 +15,12 @@ MainWindow::MainWindow() {
 }
 
 void MainWindow::Render() {
-    ImGui::Begin("Music PLayer");
+    ImGui::Begin("Music Player");
 
-    // Вывод текущего трека
+    // Отображение имени текущего трека (получаем только имя файла)
     std::string currentTrack = AudioEngine::Instance()->getCurrentTrack();
-    ImGui::Text("Track name: %s", currentTrack.empty() ? "No track" : currentTrack.c_str());
+    std::string currentTrackName = currentTrack.empty() ? "No track" : fs::path(currentTrack).filename().string();
+    ImGui::Text("Track name: %s", currentTrackName.c_str());
 
     // Панель управления воспроизведением
     if (ImGui::Button("Prev"))
@@ -32,28 +36,34 @@ void MainWindow::Render() {
         AudioEngine::Instance()->next();
 
     ImGui::Separator();
+
+    // Слайдер регулировки громкости
+    static float volume = AudioEngine::Instance()->getVolume();
+    if (ImGui::SliderFloat("Volume", &volume, 0.0f, 1.0f)) {
+        AudioEngine::Instance()->setVolume(volume);
+    }
+
+    ImGui::Separator();
     ImGui::Text("Playlist");
 
-    // Область показа плейлиста
+    // Получаем вектор показываемых имен треков (без полного пути)
+    std::vector<std::string> displayPlaylist = AudioEngine::Instance()->getDisplayPlaylist();
     ImGui::BeginChild("PlaylistArea", ImVec2(300, 200), true);
-    const auto& playlist = AudioEngine::Instance()->getPlaylist();
-    for (size_t i = 0; i < playlist.size(); i++) {
+    for (size_t i = 0; i < displayPlaylist.size(); i++) {
         bool isSelected = (selectedTrackIndex == static_cast<int>(i));
-        if (ImGui::Selectable(playlist[i].c_str(), isSelected)) {
+        if (ImGui::Selectable(displayPlaylist[i].c_str(), isSelected))
             selectedTrackIndex = static_cast<int>(i);
-        }
     }
     ImGui::EndChild();
 
     // Кнопки управления плейлистом: добавление и удаление
     if (ImGui::Button("Add")) {
-        // Открываем диалог выбора файла с фильтром .mp3.
-        // Четвёртым параметром передаём объект конфигурации по умолчанию.
-        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose mp3 file", ".mp3", IGFD::FileDialogConfig{});
+        // Открываем диалог выбора файла с фильтром .mp3
+        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose mp3 file", ".mp3", {});
     }
     ImGui::SameLine();
     if (ImGui::Button("Delete")) {
-        if (selectedTrackIndex != -1 && selectedTrackIndex < static_cast<int>(playlist.size()))
+        if (selectedTrackIndex != -1 && selectedTrackIndex < static_cast<int>(displayPlaylist.size()))
             ImGui::OpenPopup("Really delete?");
     }
 
@@ -62,21 +72,22 @@ void MainWindow::Render() {
         ImGui::Text("Are you sure you want to remove this track from the playlist?");
         ImGui::Separator();
         if (ImGui::Button("Yep", ImVec2(120, 0))) {
+            // Для удаления используем полный путь из исходного плейлиста
+            const auto &playlist = AudioEngine::Instance()->getPlaylist();
             if (selectedTrackIndex != -1 && selectedTrackIndex < static_cast<int>(playlist.size())) {
                 std::string trackToRemove = playlist[selectedTrackIndex];
                 AudioEngine::Instance()->removeTrack(trackToRemove);
-                selectedTrackIndex = -1; // сброс выбора
+                selectedTrackIndex = -1;
             }
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Nah", ImVec2(120, 0))) {
+        if (ImGui::Button("Nah", ImVec2(120, 0)))
             ImGui::CloseCurrentPopup();
-        }
         ImGui::EndPopup();
     }
 
-    // Отображение диалогового окна выбора файла
+    // Отображение диалогового окна выбора файла для добавления трека
     if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
