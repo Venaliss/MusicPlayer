@@ -16,6 +16,11 @@ public:
     
     // Возвращает название трека
     virtual std::string getTrackTitle() const = 0;
+
+    // Дополнительные методы для метаданных:
+    virtual int getSampleRate() const = 0;  // Частота дискретизации файла
+    virtual int getChannels() const = 0;    // Число каналов
+    virtual int getTotalFrames() const = 0; // Общее число аудиофреймов (каждый фрейм – набор сэмплов для всех каналов)
 };
 
-#endif // IAUDIO_DECODER_H
+#endif

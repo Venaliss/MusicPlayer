@@ -5,11 +5,14 @@
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
-#include "minimp3_ex.h"  
+#include "Decoders/MP3Decoder.h"
+#include "Audio/Interface/IAudioDecoder.h"
+#include "Decoders/WavDecoder.h"
+#include "Decoders/FlacDecoder.h"
 
 namespace fs = std::filesystem;
 
-// Singleton for AudioEngine
+// Singleton для AudioEngine
 AudioEngine* AudioEngine::Instance() {
     static AudioEngine instance;
     return &instance;
@@ -21,12 +24,14 @@ AudioEngine::AudioEngine()
       isPlaying_(false),
       volume_(1.0f) // Громкость по умолчанию = 100%
 {
+    // Инициализация аудио подсистемы SDL
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
         std::cerr << "SDL audio initialization error: " << SDL_GetError() << std::endl;
     }
     
     SDL_AudioSpec desiredSpec;
     SDL_zero(desiredSpec);
+    // Здесь устройство открывается с фиксированными параметрами (44100 Гц, 2 канала)
     desiredSpec.freq = 44100;           
     desiredSpec.format = AUDIO_S16LSB;    
     desiredSpec.channels = 2;             
@@ -58,13 +63,23 @@ void AudioEngine::addTrack(const std::string &filePath) {
 
 void AudioEngine::removeTrack(const std::string &filePath) {
     std::lock_guard<std::mutex> lock(mutex_);
-    auto it = std::find(playlist_.begin(), playlist_.end(), filePath);
-    if (it != playlist_.end()) {
-        playlist_.erase(it);
+    int removedIndex = -1;
+    for (size_t i = 0; i < playlist_.size(); i++) {
+         if (playlist_[i] == filePath) {
+              removedIndex = static_cast<int>(i);
+              break;
+         }
     }
-    if (currentTrackIndex_ >= static_cast<int>(playlist_.size())) {
-        currentTrackIndex_ = -1;
+    if (removedIndex == -1)
+        return; // трек не найден
+
+    if (removedIndex == currentTrackIndex_) {
+         stop();                     // останавливаем воспроизведение, если текущий трек удаляется
+         currentTrackIndex_ = -1;    
+    } else if (currentTrackIndex_ > removedIndex) {
+         currentTrackIndex_--;
     }
+    playlist_.erase(playlist_.begin() + removedIndex);
 }
 
 std::string AudioEngine::getCurrentTrack() const {
@@ -78,7 +93,6 @@ const std::vector<std::string>& AudioEngine::getPlaylist() const {
     return playlist_;
 }
 
-// Возвращает список отображаемых имен треков.
 std::vector<std::string> AudioEngine::getDisplayPlaylist() const {
     std::vector<std::string> displayList;
     for (const auto &fullPath : playlist_) {
@@ -167,7 +181,38 @@ void AudioEngine::stop() {
     SDL_PauseAudioDevice(deviceId_, 1);
 }
 
+// Методы для работы с позицией и длительностью трека
+int AudioEngine::getTrackDuration() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (audioBuffer_.empty() || currentChannels_ <= 0 || currentSampleRate_ <= 0)
+        return 0;
+    int frames = static_cast<int>(audioBuffer_.size() / currentChannels_);
+    return frames / currentSampleRate_;
+}
+
+int AudioEngine::getCurrentTime() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (currentChannels_ <= 0 || currentSampleRate_ <= 0)
+        return 0;
+    int framesPlayed = static_cast<int>(audioBufferPos_ / currentChannels_);
+    return framesPlayed / currentSampleRate_;
+}
+
+void AudioEngine::setTrackPosition(int seconds) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (currentSampleRate_ <= 0 || currentChannels_ <= 0)
+        return;
+    int newFrame = seconds * currentSampleRate_;
+    int newSamplePos = newFrame * currentChannels_;
+    if(newSamplePos < 0)
+        newSamplePos = 0;
+    if(newSamplePos > static_cast<int>(audioBuffer_.size()))
+        newSamplePos = static_cast<int>(audioBuffer_.size());
+    audioBufferPos_ = newSamplePos;
+}
+
 bool AudioEngine::loadTrack(const std::string &filePath) {
+    // Проверяем, существует ли файл
     std::ifstream infile(filePath);
     if (!infile.good()) {
         std::cerr << "File not found: " << filePath << std::endl;
@@ -175,58 +220,61 @@ bool AudioEngine::loadTrack(const std::string &filePath) {
     }
     infile.close();
 
-    mp3dec_t dec;
-    mp3dec_init(&dec);
+    fs::path p(filePath);
+    std::string ext = p.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-    mp3dec_file_info_t info;
-    std::memset(&info, 0, sizeof(info));
-    
-    if (mp3dec_load(&dec, filePath.c_str(), &info, nullptr, 0) != 0) {
-         std::cerr << "Error decoding MP3 file: " << filePath << std::endl;
-         return false;
-    }
-
-    if (info.hz != 44100) {
-         std::cerr << "Unsupported frequency (" << info.hz << " Hz) in file: " << filePath << std::endl;
-         free(info.buffer);
-         return false;
-    }
-
-    if (info.samples == 0 || info.buffer == nullptr) {
-         std::cerr << "No samples available in file: " << filePath << std::endl;
-         if (info.buffer)
-             free(info.buffer);
-         return false;
+    // Создаем декодер согласно расширению
+    IAudioDecoder* decoder = nullptr;
+    if (ext == ".mp3") {
+        decoder = new MP3Decoder();
+    } else if (ext == ".wav") {
+        decoder = new WavDecoder();
+    } else if (ext == ".flac") {
+        decoder = new FlacDecoder();
+    } else {
+        std::cerr << "Unsupported file extension: " << ext << std::endl;
+        return false;
     }
     
-    std::vector<int16_t> buffer;
-    if (info.channels == 1) {
-         buffer.resize(info.samples * 2);
-         mp3d_sample_t *samples_ptr = info.buffer;
-         for (size_t i = 0; i < info.samples; i++) {
-             buffer[i * 2]     = samples_ptr[i];
-             buffer[i * 2 + 1] = samples_ptr[i];
-         }
+    if (decoder == nullptr || !decoder->load(filePath)) {
+        std::cerr << "Error loading file with decoder: " << filePath << std::endl;
+        delete decoder;
+        return false;
     }
-    else if (info.channels == 2) {
-         buffer.resize(info.samples);
-         std::memcpy(buffer.data(), info.buffer, info.samples * sizeof(mp3d_sample_t));
+    
+    std::vector<float> decodedBuffer;
+    if (!decoder->decode(decodedBuffer)) {
+        std::cerr << "Error decoding file: " << filePath << std::endl;
+        delete decoder;
+        return false;
     }
-    else {
-         std::cerr << "Unsupported number of channels (" << info.channels << ") in file: " << filePath << std::endl;
-         free(info.buffer);
-         return false;
+    
+    // Получаем динамически метаданные из декодера
+    currentSampleRate_ = decoder->getSampleRate();
+    currentChannels_ = decoder->getChannels();
+    totalFrames_ = decoder->getTotalFrames(); // Если декодер их предоставляет; иначе можно вычислить: decodedBuffer.size()/currentChannels_
+    
+    // Преобразуем float сэмплы ([-1.0, 1.0]) в int16_t
+    std::vector<int16_t> intBuffer(decodedBuffer.size());
+    for (size_t i = 0; i < decodedBuffer.size(); i++) {
+        float sample = decodedBuffer[i];
+        int sampleInt = static_cast<int>(sample * 32767.0f);
+        if (sampleInt > 32767) sampleInt = 32767;
+        if (sampleInt < -32768) sampleInt = -32768;
+        intBuffer[i] = static_cast<int16_t>(sampleInt);
     }
     
     {
-         std::lock_guard<std::mutex> lock(mutex_);
-         audioBuffer_ = std::move(buffer);
-         audioBufferPos_ = 0;
+        std::lock_guard<std::mutex> lock(mutex_);
+        audioBuffer_ = std::move(intBuffer);
+        audioBufferPos_ = 0;
     }
     
-    free(info.buffer);
-    std::cout << "Track successfully loaded: " << filePath 
+    std::cout << "Track successfully loaded using decoder: " << filePath 
               << ", buffer length: " << audioBuffer_.size() << " samples" << std::endl;
+    
+    delete decoder;
     return true;
 }
 
@@ -236,22 +284,24 @@ void AudioEngine::audioCallback(Uint8* stream, int len) {
     if (!isPlaying_ || audioBuffer_.empty())
          return;
     
+    // Здесь используется фиксированное число каналов, так как аудиоустройство открыто для 2-х каналов.
+    // Если необходимо поддерживать динамическое число каналов, потребуется ресемплирование.
     int bytesPerSample = sizeof(int16_t);
-    int channels = 2;
-    int bytesPerFrame = bytesPerSample * channels;
+    int outputChannels = 2; // выходное значение аудиоустройства
+    int bytesPerFrame = bytesPerSample * outputChannels;
     int framesToWrite = len / bytesPerFrame;
 
     int16_t* out = reinterpret_cast<int16_t*>(stream);
     for (int i = 0; i < framesToWrite; i++) {
-        if (audioBufferPos_ + channels <= audioBuffer_.size()) {
-            for (int ch = 0; ch < channels; ch++) {
+        if (audioBufferPos_ + outputChannels <= audioBuffer_.size()) {
+            for (int ch = 0; ch < outputChannels; ch++) {
                 int sample = audioBuffer_[audioBufferPos_ + ch];
                 sample = static_cast<int>(sample * volume_);
                 if (sample > 32767) sample = 32767;
                 if (sample < -32768) sample = -32768;
-                out[i * channels + ch] = static_cast<int16_t>(sample);
+                out[i * outputChannels + ch] = static_cast<int16_t>(sample);
             }
-            audioBufferPos_ += channels;
+            audioBufferPos_ += outputChannels;
         } else {
             isPlaying_ = false;
             break;

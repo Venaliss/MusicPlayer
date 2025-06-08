@@ -1,14 +1,15 @@
-#ifndef MP3_DECODER_H
-#define MP3_DECODER_H
+#ifndef WAV_DECODER_H
+#define WAV_DECODER_H
 
 #include "IAudioDecoder.h"
 #include <string>
 #include <vector>
+#include "dr_wav.h"
 
-class MP3Decoder : public IAudioDecoder {
+class WavDecoder : public IAudioDecoder {
 public:
-    MP3Decoder();
-    virtual ~MP3Decoder();
+    WavDecoder();
+    virtual ~WavDecoder();
     
     virtual bool load(const std::string& filename) override;
     virtual bool decode(std::vector<float>& outBuffer) override;
@@ -20,10 +21,9 @@ public:
     virtual int getTotalFrames() const override;
 
 private:
-    std::string trackTitle;
-    int sampleRate;    // Частота дискретизации (например, 44100)
-    int channels;      // Количество каналов (например, 2)
-    int totalSamples;  // Общее число сэмплов.
+    std::string m_filename;
+    drwav m_wav;       // Структура для хранения состояния WAV файла.
+    bool m_loaded;
 };
 
-#endif // MP3_DECODER_H
+#endif // WAV_DECODER_H

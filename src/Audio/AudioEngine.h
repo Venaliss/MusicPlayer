@@ -6,6 +6,8 @@
 #include <mutex>
 #include "SDL.h"
 
+// Класс AudioEngine реализует воспроизведение, управление плейлистом и позволяет
+// получать длительность и текущую позицию трека на основе динамических метаданных.
 class AudioEngine {
 public:
     static AudioEngine* Instance();
@@ -16,7 +18,7 @@ public:
     std::string getCurrentTrack() const;
     const std::vector<std::string>& getPlaylist() const;
 
-    // Новая функция: возвращает вектор с отображаемыми именами треков.
+    // Возвращает вектор с отображаемыми именами треков.
     std::vector<std::string> getDisplayPlaylist() const;
 
     // Управление воспроизведением.
@@ -24,6 +26,14 @@ public:
     void stop();
     void next();
     void prev();
+
+    // Управление положением трека.
+    // Возвращает длительность текущего трека (в секундах).
+    int getTrackDuration() const;
+    // Возвращает текущую позицию воспроизведения (в секундах).
+    int getCurrentTime() const;
+    // Перематывает трек на заданное время (в секундах).
+    void setTrackPosition(int seconds);
 
     // Управление громкостью.
     void setVolume(float vol);
@@ -43,6 +53,12 @@ private:
     size_t audioBufferPos_;
     bool isPlaying_;
     float volume_; // Громкость в диапазоне [0.0, 1.0]
+
+    // Новые поля для динамических параметров текущего файла:
+    int currentSampleRate_; // Частота дискретизации текущего файла
+    int currentChannels_;   // Количество аудиоканалов текущего файла
+    int totalFrames_;       // Общее число аудио-фреймов текущего файла
+
     mutable std::mutex mutex_;
 };
 

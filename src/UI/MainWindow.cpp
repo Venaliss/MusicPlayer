@@ -44,6 +44,17 @@ void MainWindow::Render() {
     }
 
     ImGui::Separator();
+
+    // Слайдер времени трека
+    int trackDuration = AudioEngine::Instance()->getTrackDuration();
+    int currentTime = AudioEngine::Instance()->getCurrentTime();
+    static int sliderTime = currentTime;
+    if (ImGui::SliderInt("Track Time", &sliderTime, 0, trackDuration)) {
+        AudioEngine::Instance()->setTrackPosition(sliderTime);
+    }
+
+
+    ImGui::Separator();
     ImGui::Text("Playlist");
 
     // Получаем вектор показываемых имен треков (без полного пути)
@@ -58,8 +69,8 @@ void MainWindow::Render() {
 
     // Кнопки управления плейлистом: добавление и удаление
     if (ImGui::Button("Add")) {
-        // Открываем диалог выбора файла с фильтром .mp3
-        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose mp3 file", ".mp3", {});
+        // Открываем диалог выбора файла с фильтром для MP3, WAV и FLAC файлов.
+        ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose audio file", ".mp3,.wav,.flac", {});
     }
     ImGui::SameLine();
     if (ImGui::Button("Delete")) {

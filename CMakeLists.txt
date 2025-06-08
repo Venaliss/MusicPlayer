@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
 
-# Устанавливаем политику CMP0079 NEW и минимальную политику для под-проектов
+# Устанавливаем политику CMP0079 и минимальную CMake версию для под-проектов
 cmake_policy(SET CMP0079 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version for subprojects" FORCE)
 
 project(MyIMGUIProject)
 
-# Отключаем поддержку Wayland для GLFW
+# Отключаем поддержку Wayland для GLFW и устанавливаем стандарт C++
 set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "Disable building with Wayland support" FORCE)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -29,7 +29,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-# Fetch minimp3 (в репозитории есть только minimp3_ex.h)
+# Fetch minimp3 (содержит minimp3_ex.h)
 FetchContent_Declare(
   minimp3
   GIT_REPOSITORY https://github.com/lieff/minimp3.git
@@ -37,7 +37,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(minimp3)
 
-# Для ImGuiFileDialog не вызываем FetchContent_MakeAvailable, чтобы не использовать его CMakeLists.txt
+# Fetch ImGuiFileDialog (без использования его CMakeLists.txt)
 FetchContent_Declare(
   imguifiledialog
   GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
@@ -57,28 +57,36 @@ FetchContent_Declare(
   GIT_TAG release-2.0.22
 )
 FetchContent_MakeAvailable(sdl)
+
+# Fetch dr_libs (для dr_wav.h, dr_flac.h и т.д.)
+FetchContent_Declare(
+  dr_libs
+  GIT_REPOSITORY https://github.com/mackron/dr_libs.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(dr_libs)
+
 # ---------------- End Fetch Content ------------------
 
 # --- Глобально задаем путь к ImGui ---
 set(IMGUI_INCLUDE_DIR ${imgui_SOURCE_DIR})
 include_directories(${IMGUI_INCLUDE_DIR})
 
-# --- Создаем цель для minimp3_ex (реализация MP3-декодера) ---
-# Файл src/minimp3_ex.cpp должен содержать:
-#   #define MINIMP3_IMPLEMENTATION
-#   #include "minimp3_ex.h"
+# --- Создаем INTERFACE-цель для dr_libs ---
+add_library(dr_libs INTERFACE)
+target_include_directories(dr_libs INTERFACE ${dr_libs_SOURCE_DIR})
+
+# --- Цель для minimp3_ex (если требуется отдельно) ---
 add_library(minimp3_ex STATIC ${CMAKE_CURRENT_SOURCE_DIR}/src/minimp3_ex.cpp)
 target_include_directories(minimp3_ex PUBLIC ${minimp3_SOURCE_DIR})
 
-# --- Создаем цель ImGuiFileDialog вручную ---
-# Вместо использования собранной цели из imguifiledialog, добавляем исходный файл напрямую.
+# --- Цель ImGuiFileDialog ---
 add_library(imguifiledialog STATIC
     ${imguifiledialog_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
-target_include_directories(imguifiledialog 
-    PUBLIC 
-        ${imguifiledialog_SOURCE_DIR}     # Заголовочные файлы ImGuiFileDialog
-        ${IMGUI_INCLUDE_DIR}               # Для поиска "imgui.h"
+target_include_directories(imguifiledialog PUBLIC
+    ${imguifiledialog_SOURCE_DIR}
+    ${IMGUI_INCLUDE_DIR}
 )
 
 # --- Исходники для ImGui ---
@@ -92,23 +100,32 @@ set(IMGUI_SRC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-# --- Создаем исполняемый файл приложения ---
+# --- Цель приложения MyIMGUIApp ---
 add_executable(MyIMGUIApp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/ImGuiManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/UI/MainWindow.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/AudioEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders/MP3Decoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders/WavDecoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders/FlacDecoder.cpp
     ${IMGUI_SRC}
 )
 
-# --- Include директории для MyIMGUIApp ---
+# Добавляем определение SDL_MAIN_HANDLED для исключения ошибки SDL_main
+target_compile_definitions(MyIMGUIApp PRIVATE SDL_MAIN_HANDLED)
+
+# --- Include-директории для MyIMGUIApp ---
 target_include_directories(MyIMGUIApp PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Interface
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
-    ${imguifiledialog_SOURCE_DIR}   # Для include ImGuiFileDialog.h, если используется в коде
-    ${sdl_SOURCE_DIR}/include       # Чтобы компилятор нашел SDL.h
+    ${imguifiledialog_SOURCE_DIR}
+    ${sdl_SOURCE_DIR}/include
 )
 
 message(STATUS "ImGui source directory: ${imgui_SOURCE_DIR}")
@@ -116,13 +133,15 @@ message(STATUS "IMGUI_INCLUDE_DIR: ${IMGUI_INCLUDE_DIR}")
 message(STATUS "minimp3 source directory: ${minimp3_SOURCE_DIR}")
 message(STATUS "ImGuiFileDialog source directory: ${imguifiledialog_SOURCE_DIR}")
 message(STATUS "SDL source directory: ${sdl_SOURCE_DIR}")
+message(STATUS "dr_libs source directory: ${dr_libs_SOURCE_DIR}")
 
-# --- Линковка ---
+# --- Линковка приложения ---
 target_link_libraries(MyIMGUIApp PRIVATE
     glfw
     minimp3_ex
     imguifiledialog
-    SDL2           # Цель, создаваемая SDL (в Debug – SDL2d.lib, в Release – SDL2.lib)
+    dr_libs
+    SDL2
     SDL2main
 )
 
@@ -134,35 +153,40 @@ elseif(UNIX)
 endif()
 
 if(WIN32)
-  add_custom_command(TARGET MyIMGUIApp POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-      "$<TARGET_FILE:SDL2>"   # Полный путь к DLL для SDL2
-      $<TARGET_FILE_DIR:MyIMGUIApp>)
+    add_custom_command(TARGET MyIMGUIApp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:SDL2>"
+        $<TARGET_FILE_DIR:MyIMGUIApp>)
 endif()
 
 # ---------------- ТЕСТЫ ------------------
-# В директории 'tests' должен быть файл test.cpp, содержащий тесты для AudioEngine и других функций.
 enable_testing()
 
-# Создаем тестовую цель, которая включает тестовый исходник и аудио движок.
 add_executable(AudioEngineTests 
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/test.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/AudioEngine.cpp  # Подключаем реализацию AudioEngine для тестирования
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/AudioEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders/MP3Decoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders/WavDecoder.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders/FlacDecoder.cpp
 )
+
+target_compile_definitions(AudioEngineTests PRIVATE SDL_MAIN_HANDLED)
 
 target_include_directories(AudioEngineTests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src      # Для поиска AudioEngine.h (если он находится здесь)
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/UI   # При необходимости, если используются UI-headers
-    ${imgui_SOURCE_DIR}                   # Для ImGui (если требуется)
-    ${sdl_SOURCE_DIR}/include             # Для SDL.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Decoders
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Interface
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/UI
+    ${imgui_SOURCE_DIR}
+    ${sdl_SOURCE_DIR}/include
 )
 
-# Линкуем минимальный набор зависимостей для тестов.
 target_link_libraries(AudioEngineTests PRIVATE
     minimp3_ex
+    dr_libs
     SDL2
     SDL2main
 )
 
-# Регистрируем тестовую цель в CTest
 add_test(NAME AudioEngineTests COMMAND AudioEngineTests)
