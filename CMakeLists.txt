@@ -68,7 +68,7 @@ FetchContent_MakeAvailable(dr_libs)
 
 # ---------------- End Fetch Content ------------------
 
-# --- Глобально задаем путь к ImGui ---
+# --- Глобально задаем путь к ImGui (используется для ImGui, imgui_impl_*, ImGuiFileDialog и т.п.) ---
 set(IMGUI_INCLUDE_DIR ${imgui_SOURCE_DIR})
 include_directories(${IMGUI_INCLUDE_DIR})
 
@@ -112,7 +112,7 @@ add_executable(MyIMGUIApp
     ${IMGUI_SRC}
 )
 
-# Добавляем определение SDL_MAIN_HANDLED для исключения ошибки SDL_main
+# Определяем SDL_MAIN_HANDLED для отключения вызова SDL_main
 target_compile_definitions(MyIMGUIApp PRIVATE SDL_MAIN_HANDLED)
 
 # --- Include-директории для MyIMGUIApp ---
@@ -140,7 +140,7 @@ target_link_libraries(MyIMGUIApp PRIVATE
     glfw
     minimp3_ex
     imguifiledialog
-    dr_libs
+    dr_libs         # Обеспечивает доступ к заголовочным файлам dr_wav.h, dr_flac.h и т.д.
     SDL2
     SDL2main
 )

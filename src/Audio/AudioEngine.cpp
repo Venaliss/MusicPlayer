@@ -285,7 +285,6 @@ void AudioEngine::audioCallback(Uint8* stream, int len) {
          return;
     
     // Здесь используется фиксированное число каналов, так как аудиоустройство открыто для 2-х каналов.
-    // Если необходимо поддерживать динамическое число каналов, потребуется ресемплирование.
     int bytesPerSample = sizeof(int16_t);
     int outputChannels = 2; // выходное значение аудиоустройства
     int bytesPerFrame = bytesPerSample * outputChannels;
